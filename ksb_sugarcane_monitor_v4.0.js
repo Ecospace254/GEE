@@ -431,18 +431,21 @@ var s2Collection = DATA.sentinel2
 
 var s2withIndices = s2Collection.map(addVegetationIndices);
 
-// NEW v4.0: Extract county names using appropriate field name, with fallback
+// NEW v4.0: Define county list based on data source
+// For custom assets: use plain JS array (synchronous)
+// For public datasets: use server-side extraction (asynchronous)
+var sugarCountiesList = [
+  'Kakamega', 'Busia', 'Bungoma', 'Vihiga',
+  'Kisumu', 'Homa Bay', 'Migori', 'Siaya', 'Kisii',
+  'Trans Nzoia', 'Elgeyo Marakwet', 'Narok'
+];
+
 var countyNames;
 if (CONFIG.useCustomAssets) {
-  // For custom assets, use a direct list of Western Kenya sugar-producing counties
-  // This avoids issues with field name mismatches in custom assets
-  countyNames = ee.List([
-    'Kakamega', 'Busia', 'Bungoma', 'Vihiga',
-    'Kisumu', 'Homa Bay', 'Migori', 'Siaya', 'Kisii',
-    'Trans Nzoia', 'Elgeyo Marakwet', 'Narok'
-  ]);
+  // For custom assets: Already have the list, no server call needed
+  countyNames = null;  // Will populate dropdown synchronously
 } else {
-  // For public datasets, extract from FAO GAUL
+  // For public datasets: Extract from FAO GAUL via server
   countyNames = DATA.kenyaCounties.aggregate_array(CONFIG.countyFieldName).distinct().sort();
 }
 
@@ -1368,36 +1371,33 @@ function loadSubCounties(countyName) {
 // ============================================================================================================
 
 // FIX v4.0: Populate county dropdown with appropriate data source
-countyNames.evaluate(function(names) {
-  var sugarCounties;
-  if (CONFIG.useCustomAssets) {
-    // Custom assets: names is already a list of sugar counties
-    sugarCounties = names;
-  } else {
-    // Public datasets: filter to sugar-producing regions
-    sugarCounties = names.filter(function(name) {
+if (CONFIG.useCustomAssets) {
+  // Custom assets: Use static list, populate synchronously (no server call)
+  countySelectWidget.items().reset(sugarCountiesList);
+  countySelectWidget.setValue('Kakamega');
+  countySelectWidget.setPlaceholder('Select county...');
+  print('✓ Loaded ' + sugarCountiesList.length + ' counties into dropdown (custom assets)');
+} else {
+  // Public datasets: Extract from server, populate asynchronously
+  countyNames.evaluate(function(names) {
+    // Filter to sugar-producing regions
+    var sugarCounties = names.filter(function(name) {
       return DATA.sugarRegions.indexOf(name) !== -1;
     });
-  }
 
-  if (sugarCounties && sugarCounties.length > 0) {
-    countySelectWidget.items().reset(sugarCounties);
-    countySelectWidget.setValue('Kakamega');
-    countySelectWidget.setPlaceholder('Select county...');
-    print('✓ Loaded ' + sugarCounties.length + ' counties into dropdown');
-  } else {
-    print('⚠️ Warning: No counties loaded. Check custom asset field names.');
-    // Fallback: Use hardcoded list
-    var fallbackCounties = [
-      'Kakamega', 'Busia', 'Bungoma', 'Vihiga',
-      'Kisumu', 'Homa Bay', 'Migori', 'Siaya', 'Kisii',
-      'Trans Nzoia', 'Elgeyo Marakwet', 'Narok'
-    ];
-    countySelectWidget.items().reset(fallbackCounties);
-    countySelectWidget.setValue('Kakamega');
-    print('✓ Using fallback county list (' + fallbackCounties.length + ' counties)');
-  }
-});
+    if (sugarCounties && sugarCounties.length > 0) {
+      countySelectWidget.items().reset(sugarCounties);
+      countySelectWidget.setValue('Kakamega');
+      countySelectWidget.setPlaceholder('Select county...');
+      print('✓ Loaded ' + sugarCounties.length + ' counties into dropdown (public datasets)');
+    } else {
+      print('⚠️ Warning: No counties loaded from FAO GAUL. Using fallback.');
+      countySelectWidget.items().reset(sugarCountiesList);
+      countySelectWidget.setValue('Kakamega');
+      print('✓ Using fallback county list (' + sugarCountiesList.length + ' counties)');
+    }
+  });
+}
 
 Map.setCenter(34.75, 0.28, 8);
 Map.setOptions('HYBRID');
