@@ -44,6 +44,50 @@ var customGroundTruth = butali.merge(nzoia).merge(b001).merge(b003)
                                 .merge(dulienge).merge(elugulu).merge(matisi)
                                 .merge(matumbei).merge(matunda);
 
+// FIX: Ensure all custom assets are in EPSG:4326 (WGS84) for proper display
+// Kenya's expected bounds: Lat: -4.68 to 5.03, Lon: 33.9 to 41.9
+print('═══════════════════════════════════════════════════════════');
+print('Checking custom asset georeferencing...');
+
+// Check ROI bounds to diagnose location issues
+roiCustom.geometry().bounds().evaluate(function(bounds, error) {
+  if (error) {
+    print('⚠️ Error getting ROI bounds: ' + error);
+  } else if (bounds) {
+    var coords = bounds.coordinates().getInfo()[0];
+    var lon1 = coords[0][0], lat1 = coords[0][1];
+    var lon2 = coords[2][0], lat2 = coords[2][1];
+    print('ROI Bounds: Lon [' + lon1.toFixed(2) + ' to ' + lon2.toFixed(2) + '], ' +
+          'Lat [' + lat1.toFixed(2) + ' to ' + lat2.toFixed(2) + ']');
+
+    // Check if coordinates are in Kenya's expected range
+    if (lon1 < 33 || lon2 > 42 || lat1 < -5 || lat2 > 6) {
+      print('❌ WARNING: Coordinates outside Kenya! CRS likely incorrect.');
+      print('   Expected: Lon 33-42, Lat -5 to 5');
+      print('   Reprojecting assets to EPSG:4326...');
+    } else {
+      print('✓ Coordinates look correct (within Kenya bounds)');
+    }
+  }
+});
+
+// Reproject all custom assets to EPSG:4326 (WGS84) to ensure correct display
+// This handles cases where assets were exported in UTM or other projections
+kenyaCountiesCustom = kenyaCountiesCustom.map(function(f) {
+  return ee.Feature(f.geometry().transform('EPSG:4326', 0.001), f.toDictionary());
+});
+
+roiCustom = roiCustom.map(function(f) {
+  return ee.Feature(f.geometry().transform('EPSG:4326', 0.001), f.toDictionary());
+});
+
+customGroundTruth = customGroundTruth.map(function(f) {
+  return ee.Feature(f.geometry().transform('EPSG:4326', 0.001), f.toDictionary());
+});
+
+print('✓ Custom assets reprojected to EPSG:4326');
+print('═══════════════════════════════════════════════════════════');
+
 // ============================================================================================================
 // SECTION 1: CONFIGURATION
 // ============================================================================================================
@@ -1399,7 +1443,20 @@ if (CONFIG.useCustomAssets) {
   });
 }
 
-Map.setCenter(34.75, 0.28, 8);
+// FIX: Center map on actual ROI bounds instead of hardcoded coordinates
+// This ensures map centers on custom assets regardless of their location
+roi.geometry().bounds().evaluate(function(bounds, error) {
+  if (!error && bounds) {
+    var center = bounds.centroid().coordinates().getInfo();
+    Map.setCenter(center[0], center[1], 8);
+    print('✓ Map centered on ROI: [' + center[0].toFixed(2) + ', ' + center[1].toFixed(2) + ']');
+  } else {
+    // Fallback to Western Kenya coordinates if bounds fail
+    Map.setCenter(34.75, 0.28, 8);
+    print('⚠️ Using fallback map center (Western Kenya)');
+  }
+});
+
 Map.setOptions('HYBRID');
 Map.addLayer(roi.style(VIS.roi), {}, 'Sugar Belt ROI', true, 0.7);
 
@@ -1413,6 +1470,8 @@ print('  3. ✅ Improved accuracy: 80% → 92%+ (using real data)');
 print('  4. ✅ Adaptive data source (custom/public toggle)');
 print('  5. ✅ Enhanced training sample quality');
 print('  6. ✅ Fixed county/sub-county dropdown population');
+print('  7. ✅ Auto-reproject custom assets to EPSG:4326');
+print('  8. ✅ Dynamic map centering on actual ROI location');
 print('');
 if (CONFIG.useCustomAssets) {
   print('📡 DATA SOURCE: Custom Assets (Drone-Mapped Farms)');
