@@ -380,23 +380,44 @@ function classifyAge(indices) {
 }
 
 function calculateArea(mask, geometry, scale, callback) {
-  var area = mask.multiply(ee.Image.pixelArea())
-                 .reduceRegion({
-                   reducer: ee.Reducer.sum(),
-                   geometry: geometry,
-                   scale: scale,
-                   maxPixels: 1e13,
-                   bestEffort: true,
-                   tileScale: 4  // FIX v4.0: Add tileScale to prevent memory errors
-                 });
+  // FIX v4.0: Rename band to 'area' for consistent result key
+  var maskRenamed = mask.rename('area');
+  var areaImage = maskRenamed.multiply(ee.Image.pixelArea());
+
+  var area = areaImage.reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: geometry,
+    scale: scale,
+    maxPixels: 1e13,
+    bestEffort: true,
+    tileScale: 4  // FIX v4.0: Add tileScale to prevent memory errors
+  });
 
   area.evaluate(function(result, error) {
     if (error) {
       print('⚠️ Area calculation error: ' + error);
       callback(null, error);
+      return;
+    }
+
+    // FIX v4.0: Check result exists and get area value
+    if (result && result.area !== undefined) {
+      var areaM2 = result.area;
+      var areaHa = areaM2 / 10000;
+      print('✓ Area calculated: ' + areaHa.toFixed(2) + ' hectares');
+      callback(areaHa, null);
     } else {
-      var areaM2 = result.classification || result.AGE_CLASS || result.constant || 0;
-      callback(areaM2 / 10000, null);
+      // Fallback: try to get first property value
+      var keys = Object.keys(result || {});
+      if (keys.length > 0) {
+        var areaM2 = result[keys[0]];
+        var areaHa = areaM2 / 10000;
+        print('✓ Area calculated (fallback key "' + keys[0] + '"): ' + areaHa.toFixed(2) + ' ha');
+        callback(areaHa, null);
+      } else {
+        print('⚠️ Area calculation returned no data');
+        callback(0, 'No data returned');
+      }
     }
   });
 }
@@ -1062,8 +1083,13 @@ function performMLAnalysis(median, aoi, aoiGeometry, analysisScale, threshold, a
 
       // FIX v3.2: Auto-calculate and display area
       calculateArea(sugarcaneMask, aoiGeometry, analysisScale, function(areaHa, error) {
-        if (!error && areaHa) {
+        if (error) {
+          print('⚠️ Detection area calculation failed: ' + error);
+          areaLabel.setValue('Total Area: Calculation failed');
+        } else if (areaHa !== null && areaHa !== undefined) {
           areaLabel.setValue('Total Area: ' + areaHa.toFixed(2) + ' hectares');
+        } else {
+          areaLabel.setValue('Total Area: No data');
         }
       });
 
@@ -1081,8 +1107,13 @@ function performMLAnalysis(median, aoi, aoiGeometry, analysisScale, threshold, a
 
       // FIX v3.2: Calculate both area and mean yield
       calculateArea(sugarcaneMask, aoiGeometry, analysisScale, function(areaHa, error) {
-        if (!error && areaHa) {
+        if (error) {
+          print('⚠️ Yield area calculation failed: ' + error);
+          areaLabel.setValue('Total Area: Calculation failed');
+        } else if (areaHa !== null && areaHa !== undefined) {
           areaLabel.setValue('Total Area: ' + areaHa.toFixed(2) + ' hectares');
+        } else {
+          areaLabel.setValue('Total Area: No data');
         }
       });
 
