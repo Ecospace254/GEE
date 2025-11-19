@@ -386,11 +386,13 @@ function calculateArea(mask, geometry, scale, callback) {
                    geometry: geometry,
                    scale: scale,
                    maxPixels: 1e13,
-                   bestEffort: true
+                   bestEffort: true,
+                   tileScale: 4  // FIX v4.0: Add tileScale to prevent memory errors
                  });
 
   area.evaluate(function(result, error) {
     if (error) {
+      print('⚠️ Area calculation error: ' + error);
       callback(null, error);
     } else {
       var areaM2 = result.classification || result.AGE_CLASS || result.constant || 0;
@@ -1084,16 +1086,26 @@ function performMLAnalysis(median, aoi, aoiGeometry, analysisScale, threshold, a
         }
       });
 
+      // FIX v4.0: Calculate mean yield with memory optimization
       yieldEst.reduceRegion({
         reducer: ee.Reducer.mean(),
         geometry: aoiGeometry,
         scale: analysisScale,
         maxPixels: 1e13,
-        bestEffort: true
-      }).evaluate(function(result) {
-        var meanYield = result.YIELD_TCH;
-        if (meanYield) {
+        bestEffort: true,
+        tileScale: 4  // FIX: Add tileScale to prevent memory errors
+      }).evaluate(function(result, error) {  // FIX: Add error parameter
+        if (error) {
+          print('⚠️ Yield calculation error: ' + error);
+          yieldLabel.setValue('Mean Yield: Calculation failed (memory limit)');
+          return;
+        }
+        if (result && result.YIELD_TCH) {  // FIX: Check result exists
+          var meanYield = result.YIELD_TCH;
           yieldLabel.setValue('Mean Yield: ' + meanYield.toFixed(1) + ' TCH');
+        } else {
+          print('⚠️ Yield calculation returned no data');
+          yieldLabel.setValue('Mean Yield: No data');
         }
       });
 
@@ -1117,15 +1129,22 @@ function performMLAnalysis(median, aoi, aoiGeometry, analysisScale, threshold, a
         }
       });
 
+      // FIX v4.0: Calculate age distribution with memory optimization
       ageClass.reduceRegion({
         reducer: ee.Reducer.frequencyHistogram(),
         geometry: aoiGeometry,
         scale: analysisScale,
         maxPixels: 1e13,
-        bestEffort: true
-      }).evaluate(function(result) {
-        var hist = result.AGE_CLASS;
-        if (hist) {
+        bestEffort: true,
+        tileScale: 4  // FIX: Add tileScale to prevent memory errors
+      }).evaluate(function(result, error) {  // FIX: Add error parameter
+        if (error) {
+          print('⚠️ Age classification error: ' + error);
+          ageStatsLabel.setValue('Age Distribution: Calculation failed (memory limit)');
+          return;
+        }
+        if (result && result.AGE_CLASS) {  // FIX: Check result exists
+          var hist = result.AGE_CLASS;
           var young = hist['1'] || 0;
           var mature = hist['2'] || 0;
           var harvest = hist['3'] || 0;
@@ -1139,7 +1158,12 @@ function performMLAnalysis(median, aoi, aoiGeometry, analysisScale, threshold, a
                            '  Harvest: ' + ((harvest/total)*100).toFixed(1) + '%\n' +
                            '  Over-Mature: ' + ((over/total)*100).toFixed(1) + '%';
             ageStatsLabel.setValue(statsText);
+          } else {
+            ageStatsLabel.setValue('Age Distribution: No data');
           }
+        } else {
+          print('⚠️ Age classification returned no data');
+          ageStatsLabel.setValue('Age Distribution: No data');
         }
       });
 
@@ -1478,6 +1502,7 @@ print('  5. ✅ Enhanced training sample quality');
 print('  6. ✅ Fixed county/sub-county dropdown population');
 print('  7. ✅ Auto-reproject custom assets to EPSG:4326');
 print('  8. ✅ Dynamic map centering on actual ROI location');
+print('  9. ✅ Memory optimization (tileScale=4 for large areas)');
 print('');
 if (CONFIG.useCustomAssets) {
   print('📡 DATA SOURCE: Custom Assets (Drone-Mapped Farms)');
