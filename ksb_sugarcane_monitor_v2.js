@@ -1,7 +1,7 @@
 // ============================================================================================================
 // KENYA SUGAR BOARD (KSB) - SUGARCANE MONITORING SYSTEM v2.0
 // ============================================================================================================
-// Developed by: Ecospace Services
+// Developed by: Ecospace Services Ltd
 // Client: Kenya Sugar Board
 // Purpose: Remote sensing-based sugarcane area estimation, yield prediction, and age classification
 // Date: November 2025
@@ -1130,4 +1130,4 @@ print('2. For production use, replace with actual ground-truth sugarcane field d
 print('3. Yield estimates are based on literature models calibrated for Kenya');
 print('4. Age classification requires known planting dates for best accuracy');
 print('');
-print('📧 Support: Ecospace Services | Kenya Sugar Board');
+print('📧 Support: Ecospace Services Ltd @ 2025 | Kenya Sugar Board');
