@@ -78,6 +78,10 @@ kenyaCountiesCustom = kenyaCountiesCustom.map(function(f) {
   return ee.Feature(f.geometry().transform('EPSG:4326', 0.001), f.toDictionary());
 });
 
+westKenya = westKenya.map(function(f) {
+  return ee.Feature(f.geometry().transform('EPSG:4326', 0.001), f.toDictionary());
+});
+
 roiCustom = roiCustom.map(function(f) {
   return ee.Feature(f.geometry().transform('EPSG:4326', 0.001), f.toDictionary());
 });
@@ -946,7 +950,22 @@ function runAnalysis() {
 
   var aoiGeometry = aoi.geometry();
 
-  Map.centerObject(aoi, regionMode === 'County' ? 10 : 8);
+  // FIX v4.0: Manual centering to ensure correct coordinates for custom assets
+  var targetZoom = regionMode === 'County' ? 10 : (regionMode === 'Sub-County' ? 11 : 8);
+  aoi.geometry().bounds().evaluate(function(bounds, error) {
+    if (!error && bounds) {
+      var coords = bounds.coordinates[0];
+      var centerLon = (coords[0][0] + coords[2][0]) / 2;
+      var centerLat = (coords[0][1] + coords[2][1]) / 2;
+      Map.setCenter(centerLon, centerLat, targetZoom);
+      print('✓ Map centered on ' + aoiName + ': [' + centerLon.toFixed(2) + ', ' + centerLat.toFixed(2) + ']');
+    } else {
+      // Fallback to default Kenya center
+      Map.setCenter(34.75, 0.28, targetZoom);
+      print('⚠️ Using default map center (bounds evaluation failed)');
+    }
+  });
+
   Map.addLayer(roi.style(VIS.roi), {}, 'Sugar Belt ROI', true, 0.7);
   Map.addLayer(aoi.style(VIS.aoi), {}, 'AOI: ' + aoiName, true, 1);
 
