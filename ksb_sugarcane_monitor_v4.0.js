@@ -54,7 +54,8 @@ roiCustom.geometry().bounds().evaluate(function(bounds, error) {
   if (error) {
     print('⚠️ Error getting ROI bounds: ' + error);
   } else if (bounds) {
-    var coords = bounds.coordinates().getInfo()[0];
+    // bounds is already client-side GeoJSON - access coordinates directly
+    var coords = bounds.coordinates[0];  // Property, not method
     var lon1 = coords[0][0], lat1 = coords[0][1];
     var lon2 = coords[2][0], lat2 = coords[2][1];
     print('ROI Bounds: Lon [' + lon1.toFixed(2) + ' to ' + lon2.toFixed(2) + '], ' +
@@ -1447,9 +1448,14 @@ if (CONFIG.useCustomAssets) {
 // This ensures map centers on custom assets regardless of their location
 roi.geometry().bounds().evaluate(function(bounds, error) {
   if (!error && bounds) {
-    var center = bounds.centroid().coordinates().getInfo();
-    Map.setCenter(center[0], center[1], 8);
-    print('✓ Map centered on ROI: [' + center[0].toFixed(2) + ', ' + center[1].toFixed(2) + ']');
+    // bounds is already client-side GeoJSON - compute center manually
+    var coords = bounds.coordinates[0];  // Property, not method
+    var lon1 = coords[0][0], lat1 = coords[0][1];
+    var lon2 = coords[2][0], lat2 = coords[2][1];
+    var centerLon = (lon1 + lon2) / 2;
+    var centerLat = (lat1 + lat2) / 2;
+    Map.setCenter(centerLon, centerLat, 8);
+    print('✓ Map centered on ROI: [' + centerLon.toFixed(2) + ', ' + centerLat.toFixed(2) + ']');
   } else {
     // Fallback to Western Kenya coordinates if bounds fail
     Map.setCenter(34.75, 0.28, 8);
