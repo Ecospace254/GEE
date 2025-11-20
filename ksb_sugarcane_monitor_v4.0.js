@@ -44,35 +44,35 @@ var customGroundTruth = butali.merge(nzoia).merge(b001).merge(b003)
                                 .merge(dulienge).merge(elugulu).merge(matisi)
                                 .merge(matumbei).merge(matunda);
 
-// FIX v4.0: CORRECT CRS reprojection for custom assets
-// Custom assets are in EPSG:32636 (UTM Zone 36N for western Kenya)
+// FIX v4.0: Ensure custom assets use WGS84 (EPSG:4326) for correct imagery filtering
 // Kenya bounds: Lat: -4.68 to 5.03, Lon: 33.9 to 41.9
 // Western Kenya (sugarcane region): Lon 33.9-35.5, Lat -0.5 to 1.5
 print('═══════════════════════════════════════════════════════════');
-print('🔧 Reprojecting custom assets from UTM to WGS84...');
+print('🔧 Transforming custom assets to WGS84...');
 
-// CORRECT METHOD: Use transform with source and target CRS
+// Transform to EPSG:4326 (WGS84) with 1m max error
+// Syntax: geometry.transform(targetProjection, maxError)
 kenyaCountiesCustom = kenyaCountiesCustom.map(function(f) {
-  var geom = f.geometry().transform('EPSG:32636', 'EPSG:4326', 1);
+  var geom = f.geometry().transform('EPSG:4326', 1);
   return ee.Feature(geom, f.toDictionary());
 });
 
 westKenya = westKenya.map(function(f) {
-  var geom = f.geometry().transform('EPSG:32636', 'EPSG:4326', 1);
+  var geom = f.geometry().transform('EPSG:4326', 1);
   return ee.Feature(geom, f.toDictionary());
 });
 
 roiCustom = roiCustom.map(function(f) {
-  var geom = f.geometry().transform('EPSG:32636', 'EPSG:4326', 1);
+  var geom = f.geometry().transform('EPSG:4326', 1);
   return ee.Feature(geom, f.toDictionary());
 });
 
 customGroundTruth = customGroundTruth.map(function(f) {
-  var geom = f.geometry().transform('EPSG:32636', 'EPSG:4326', 1);
+  var geom = f.geometry().transform('EPSG:4326', 1);
   return ee.Feature(geom, f.toDictionary());
 });
 
-print('✓ Custom assets reprojected from EPSG:32636 to EPSG:4326');
+print('✓ Custom assets transformed to EPSG:4326 (WGS84)');
 
 // Diagnostic: Verify reprojection succeeded
 roiCustom.geometry().bounds().evaluate(function(bounds, error) {
