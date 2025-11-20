@@ -44,40 +44,38 @@ var customGroundTruth = butali.merge(nzoia).merge(b001).merge(b003)
                                 .merge(dulienge).merge(elugulu).merge(matisi)
                                 .merge(matumbei).merge(matunda);
 
-// FIX v4.0: Robust reprojection for custom assets
+// FIX v4.0: CRITICAL - Proper CRS reprojection for custom assets
 // Kenya's expected bounds: Lat: -4.68 to 5.03, Lon: 33.9 to 41.9
+// Western Kenya (sugarcane region): Lon 33.9-35.5, Lat -0.5 to 1.5
 print('═══════════════════════════════════════════════════════════');
-print('Applying robust CRS fix for custom assets...');
+print('🔧 Applying CRS reprojection for custom assets...');
 
-// Helper function to reproject features more aggressively
-function robustReproject(featureCollection, targetCRS) {
-  return featureCollection.map(function(feature) {
-    var geom = feature.geometry();
-    // Try multiple common Kenya projections
-    var reprojected;
-    try {
-      // First try: Assume it's in EPSG:32636 (UTM Zone 36N - covers western Kenya)
-      reprojected = geom.transform('EPSG:32636', 1, 'EPSG:4326', 0.001);
-    } catch (e) {
-      try {
-        // Second try: Assume it's in EPSG:32637 (UTM Zone 37N - covers eastern Kenya)
-        reprojected = geom.transform('EPSG:32637', 1, 'EPSG:4326', 0.001);
-      } catch (e2) {
-        // Fallback: Just transform from current CRS
-        reprojected = geom.transform('EPSG:4326', 0.001);
-      }
-    }
-    return ee.Feature(reprojected, feature.toDictionary());
-  });
-}
+// CORRECT METHOD: Reproject by explicitly setting source CRS
+// Custom assets are in EPSG:32636 (UTM Zone 36N for western Kenya)
+kenyaCountiesCustom = kenyaCountiesCustom.map(function(f) {
+  // Transform geometry from UTM 36N to WGS84
+  var geom = ee.Geometry(f.geometry().coordinates(), 'EPSG:32636', false).transform('EPSG:4326', 1);
+  return ee.Feature(geom, f.toDictionary());
+});
 
-// Apply robust reprojection to all custom assets
-kenyaCountiesCustom = robustReproject(kenyaCountiesCustom, 'EPSG:4326');
-westKenya = robustReproject(westKenya, 'EPSG:4326');
-roiCustom = robustReproject(roiCustom, 'EPSG:4326');
-customGroundTruth = robustReproject(customGroundTruth, 'EPSG:4326');
+westKenya = westKenya.map(function(f) {
+  var geom = ee.Geometry(f.geometry().coordinates(), 'EPSG:32636', false).transform('EPSG:4326', 1);
+  return ee.Feature(geom, f.toDictionary());
+});
 
-// Diagnostic: Check if reprojection worked
+roiCustom = roiCustom.map(function(f) {
+  var geom = ee.Geometry(f.geometry().coordinates(), 'EPSG:32636', false).transform('EPSG:4326', 1);
+  return ee.Feature(geom, f.toDictionary());
+});
+
+customGroundTruth = customGroundTruth.map(function(f) {
+  var geom = ee.Geometry(f.geometry().coordinates(), 'EPSG:32636', false).transform('EPSG:4326', 1);
+  return ee.Feature(geom, f.toDictionary());
+});
+
+print('✓ Custom assets reprojected from EPSG:32636 to EPSG:4326');
+
+// Diagnostic: Verify reprojection worked
 roiCustom.geometry().bounds().evaluate(function(bounds, error) {
   if (error) {
     print('⚠️ Error getting ROI bounds: ' + error);
@@ -85,20 +83,16 @@ roiCustom.geometry().bounds().evaluate(function(bounds, error) {
     var coords = bounds.coordinates[0];
     var lon1 = coords[0][0], lat1 = coords[0][1];
     var lon2 = coords[2][0], lat2 = coords[2][1];
-    print('ROI Bounds after reprojection:');
-    print('  Lon: [' + lon1.toFixed(4) + ' to ' + lon2.toFixed(4) + ']');
-    print('  Lat: [' + lat1.toFixed(4) + ' to ' + lat2.toFixed(4) + ']');
+    print('✓ ROI Bounds: Lon [' + lon1.toFixed(4) + ' to ' + lon2.toFixed(4) + '], ' +
+          'Lat [' + lat1.toFixed(4) + ' to ' + lat2.toFixed(4) + ']');
 
     if (lon1 >= 33 && lon2 <= 42 && lat1 >= -5 && lat2 <= 6) {
-      print('✓ Coordinates are within Kenya bounds');
+      print('✓ Coordinates verified - within Kenya bounds');
     } else {
-      print('❌ WARNING: Coordinates still outside Kenya!');
-      print('   Expected: Lon 33-42, Lat -5 to 5');
+      print('❌ WARNING: Coordinates outside Kenya!');
     }
   }
 });
-
-print('✓ Custom assets reprojected with robust method');
 print('═══════════════════════════════════════════════════════════');
 
 // ============================================================================================================
@@ -201,6 +195,51 @@ var CONFIG = {
   // NEW in v4.0: Field name configuration for adaptive data sources
   countyFieldName: null,  // Will be set automatically based on useCustomAssets
   subCountyFieldName: null  // Will be set automatically
+};
+
+// ============================================================================================================
+// COLOR SCHEME - Professional Dark Greens, Blues, Clean Whites
+// ============================================================================================================
+var THEME = {
+  primary: {
+    dark: '#004d40',      // Deep teal green
+    main: '#00695c',      // Main teal green
+    light: '#00897b',     // Light teal green
+    accent: '#26a69a'     // Accent teal
+  },
+  secondary: {
+    dark: '#01579b',      // Deep blue
+    main: '#0277bd',      // Main blue
+    light: '#0288d1',     // Light blue
+    accent: '#03a9f4'     // Accent blue
+  },
+  neutral: {
+    white: '#ffffff',
+    offWhite: '#fafafa',
+    lightGray: '#f5f5f5',
+    gray: '#e0e0e0',
+    darkGray: '#757575',
+    charcoal: '#424242'
+  },
+  success: {
+    dark: '#2e7d32',
+    main: '#43a047',
+    light: '#66bb6a'
+  },
+  warning: {
+    main: '#fb8c00',
+    light: '#ffa726'
+  },
+  error: {
+    main: '#e53935',
+    light: '#ef5350'
+  },
+  text: {
+    primary: '#212121',
+    secondary: '#757575',
+    hint: '#9e9e9e',
+    disabled: '#bdbdbd'
+  }
 };
 
 // ============================================================================================================
@@ -609,7 +648,7 @@ function generateStatsTable(stats) {
 // Update charts panel with analysis results
 function updateChartsPanel(analysisMode, data) {
   chartContainer.clear();
-  chartsPanel.style().set('shown', true);
+  // Charts panel is always visible now - no need to show/hide
 
   if (analysisMode === 'Yield Estimation' && data.yieldImage && data.geometry) {
     var yieldChart = generateYieldHistogram(data.yieldImage, data.geometry, data.scale);
@@ -992,14 +1031,14 @@ accuracyPanel.add(ui.Label('MODEL ACCURACY:', {fontWeight: 'bold', fontSize: '11
 accuracyPanel.add(accuracyLabel);
 contentPanel.add(accuracyPanel);
 
-// NEW v4.0: BI Analytics Charts Panel
+// NEW v4.0: BI Analytics Charts Panel - ALWAYS VISIBLE
 var chartsPanel = ui.Panel({
   style: {
-    backgroundColor: '#F5F5F5',
-    padding: '10px',
-    margin: '8px 0px',
-    border: '1px solid #1B5E20',
-    shown: false
+    backgroundColor: THEME.neutral.offWhite,
+    padding: '12px',
+    margin: '10px 0px',
+    border: '2px solid ' + THEME.primary.main,
+    borderRadius: '4px'
   }
 });
 var chartsTitleLabel = ui.Label('📊 ANALYTICS DASHBOARD', {
@@ -1126,21 +1165,10 @@ function runAnalysis() {
 
   var aoiGeometry = aoi.geometry();
 
-  // FIX v4.0: Manual centering to ensure correct coordinates for custom assets
+  // FIX v4.0: Use Map.centerObject now that reprojection is correct
   var targetZoom = regionMode === 'County' ? 10 : (regionMode === 'Sub-County' ? 11 : 8);
-  aoi.geometry().bounds().evaluate(function(bounds, error) {
-    if (!error && bounds) {
-      var coords = bounds.coordinates[0];
-      var centerLon = (coords[0][0] + coords[2][0]) / 2;
-      var centerLat = (coords[0][1] + coords[2][1]) / 2;
-      Map.setCenter(centerLon, centerLat, targetZoom);
-      print('✓ Map centered on ' + aoiName + ': [' + centerLon.toFixed(2) + ', ' + centerLat.toFixed(2) + ']');
-    } else {
-      // Fallback to default Kenya center
-      Map.setCenter(34.75, 0.28, targetZoom);
-      print('⚠️ Using default map center (bounds evaluation failed)');
-    }
-  });
+  Map.centerObject(aoi, targetZoom);
+  print('✓ Map centered on ' + aoiName);
 
   Map.addLayer(roi.style(VIS.roi), {}, 'Sugar Belt ROI', true, 0.7);
   Map.addLayer(aoi.style(VIS.aoi), {}, 'AOI: ' + aoiName, true, 1);
